@@ -74,6 +74,41 @@
     </div>
 
     <script>
+       function simplifyPolyline(polyline, tolerance) {
+    if (polyline.length <= 2) {
+        return polyline; // Can't simplify further
+    }
+    
+    // Find the point with the maximum distance
+    let maxDistance = 0;
+    let maxIndex = 0;
+    const end = polyline.length - 1;
+    const start = 0;
+    for (let i = start + 1; i < end; i++) {
+        const distance = perpendicularDistance(polyline[i], polyline[start], polyline[end]);
+        if (distance > maxDistance) {
+            maxDistance = distance;
+            maxIndex = i;
+        }
+    }
+
+    // If the maximum distance is greater than the tolerance, recursively simplify
+    if (maxDistance > tolerance) {
+        const leftPart = simplifyPolyline(polyline.slice(start, maxIndex + 1), tolerance);
+        const rightPart = simplifyPolyline(polyline.slice(maxIndex, end + 1), tolerance);
+        return leftPart.slice(0, leftPart.length - 1).concat(rightPart);
+    } else {
+        return [polyline[start], polyline[end]];
+    }
+}
+
+// Function to calculate the perpendicular distance from a point to a line segment
+function perpendicularDistance(point, start, end) {
+    const numerator = Math.abs((end[1] - start[1]) * point[0] - (end[0] - start[0]) * point[1] + end[0] * start[1] - end[1] * start[0]);
+    const denominator = Math.sqrt(Math.pow(end[1] - start[1], 2) + Math.pow(end[0] - start[0], 2));
+    return numerator / denominator;
+}
+
         document.addEventListener('DOMContentLoaded', function () {
             var map, datasource;
 
@@ -84,7 +119,7 @@
                 // Add authentication details for connecting to Azure Maps.
                 authOptions: {
                     authType: 'subscriptionKey',
-                    subscriptionKey: 'ga6N-Pxs9QImElvXeg3J3H7UQRcVk_zRXejD8NJQt6E'
+                    subscriptionKey: 'ga6N-Pxs9QImElvXeg3J3H7UQRcVk_zRXejD8NJQt6E' // Replace with your actual subscription key
                 }
             });
 
