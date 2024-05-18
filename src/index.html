@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <title>Christchurch Bus Route Optimizer</title>
@@ -93,6 +93,12 @@
                 datasource = new atlas.source.DataSource();
                 map.sources.add(datasource);
 
+                // Add a layer for the line to make it visible
+                map.layers.add(new atlas.layer.LineLayer(datasource, null, {
+                    strokeColor: 'blue', // Color of the line
+                    strokeWidth: 3 // Width of the line
+                }));
+
                 // Load bus routes when the map is ready.
                 loadBusRoutes();
             });
@@ -156,43 +162,89 @@
             }
 
             async function loadCoordinates(routeId, tripId) {
-                try {
-                    // Call external API to fetch list of coordinates for selected bus route and trip
-                    const response = await fetch(`https://busmetroapiapp.azurewebsites.net/api/Maps/GetTripData?RouteId=${routeId}&TripID=${tripId}`);
-                    const coordinatesData = await response.json();
+    try {
+        // Call external API to fetch list of coordinates for selected bus route and trip
+        const response = await fetch(`https://busmetroapiapp.azurewebsites.net/api/Maps/GetTripData?RouteId=${routeId}&TripID=${tripId}`);
+        
+        if (!response.ok) {
+            throw new Error('Failed to fetch coordinates data');
+        }
 
-                    // Clear existing data
-                    datasource.clear();
+        const coordinatesData = await response.json();
 
-                    // Add coordinates to the datasource
-                    const coordinates = coordinatesData.map(coord => ({
-                        type: 'Feature',
-                        geometry: {
-                            type: 'Point',
-                            coordinates: [coord.stop_lon, coord.stop_lat]
-                        }
-                    }));
-                    datasource.add(coordinates);
+        // Verify if coordinatesData is an array and contains data
+        if (!Array.isArray(coordinatesData) || coordinatesData.length === 0) {
+            throw new Error('Coordinates data is empty or invalid');
+        }
 
-                    if (coordinates.length > 0) {
-                        // Create a LineString from the coordinates.
-                        const lineStringCoordinates = coordinates.map(coord => coord.geometry.coordinates);
-                        const lineString = new atlas.Shape(new atlas.data.LineString(lineStringCoordinates));
+        // Clear existing data
+        datasource.clear();
 
-                        // Add the LineString to the data source.
-                        datasource.add(lineString);
-                        
-                        // Fit map view to the LineString bounds.
-                        map.setCamera({
-                            bounds: lineString.getBounds(),
-                            padding: 50
-                        });
-                    }
-                } catch (error) {
-                    console.error('Error loading coordinates:', error);
-                    alert('Failed to load coordinates');
-                }
+        // Extract longitude and latitude coordinates
+        const coordinates = coordinatesData.map(coord => [coord.stop_lon, coord.stop_lat]);
+
+        if (coordinates.length > 1) {
+            // Calculate bounding box manually
+            let minLon = Number.POSITIVE_INFINITY;
+            let maxLon = Number.NEGATIVE_INFINITY;
+            let minLat = Number.POSITIVE_INFINITY;
+            let maxLat = Number.NEGATIVE_INFINITY;
+
+            coordinates.forEach(coord => {
+                minLon = Math.min(minLon, coord[0]);
+                maxLon = Math.max(maxLon, coord[0]);
+                minLat = Math.min(minLat, coord[1]);
+                maxLat = Math.max(maxLat, coord[1]);
+            });
+
+            // Create bounding box
+            const bounds = new atlas.data.BoundingBox([minLon, minLat], [maxLon, maxLat]);
+
+            // Fetch routes between consecutive coordinates
+            const routes = await fetchRoutesBetweenCoordinates(coordinates);
+
+            // Draw the obtained routes on the map
+            routes.forEach(route => {
+                const lineString = new atlas.data.LineString(route);
+                const shape = new atlas.Shape(lineString);
+                datasource.add(shape);
+            });
+
+            // Fit map view to the bounding box bounds.
+            map.setCamera({
+                bounds: bounds,
+                padding: 50
+            });
+        } else {
+            throw new Error('Not enough coordinates to draw a route');
+        }
+    } catch (error) {
+        console.error('Error loading coordinates:', error);
+        alert('Failed to load coordinates: ' + error.message);
+    }
+}
+
+
+
+
+async function fetchRoutesBetweenCoordinates(coordinates) {
+    const routes = [];
+    for (let i = 0; i < coordinates.length - 1; i++) {
+        const startPoint = coordinates[i];
+        const endPoint = coordinates[i + 1];
+        const route = await fetchRoute(startPoint, endPoint);
+        routes.push(route);
+    }
+    return routes;
+}
+
+async function fetchRoute(startPoint, endPoint) {
+    const response = await fetch(`https://atlas.microsoft.com/route/directions/json?subscription-key=ga6N-Pxs9QImElvXeg3J3H7UQRcVk_zRXejD8NJQt6E&api-version=1.0&query=${startPoint[1]},${startPoint[0]}:${endPoint[1]},${endPoint[0]}`);
+    const data = await response.json();
+    const route = data.routes[0].legs[0].points.map(point => [point.longitude, point.latitude]);
+    return route;
             }
+
 
         });
     </script>
