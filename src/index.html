@@ -74,43 +74,8 @@
     </div>
 
     <script>
-       function simplifyPolyline(polyline, tolerance) {
-    if (polyline.length <= 2) {
-        return polyline; // Can't simplify further
-    }
-    
-    // Find the point with the maximum distance
-    let maxDistance = 0;
-    let maxIndex = 0;
-    const end = polyline.length - 1;
-    const start = 0;
-    for (let i = start + 1; i < end; i++) {
-        const distance = perpendicularDistance(polyline[i], polyline[start], polyline[end]);
-        if (distance > maxDistance) {
-            maxDistance = distance;
-            maxIndex = i;
-        }
-    }
-
-    // If the maximum distance is greater than the tolerance, recursively simplify
-    if (maxDistance > tolerance) {
-        const leftPart = simplifyPolyline(polyline.slice(start, maxIndex + 1), tolerance);
-        const rightPart = simplifyPolyline(polyline.slice(maxIndex, end + 1), tolerance);
-        return leftPart.slice(0, leftPart.length - 1).concat(rightPart);
-    } else {
-        return [polyline[start], polyline[end]];
-    }
-}
-
-// Function to calculate the perpendicular distance from a point to a line segment
-function perpendicularDistance(point, start, end) {
-    const numerator = Math.abs((end[1] - start[1]) * point[0] - (end[0] - start[0]) * point[1] + end[0] * start[1] - end[1] * start[0]);
-    const denominator = Math.sqrt(Math.pow(end[1] - start[1], 2) + Math.pow(end[0] - start[0], 2));
-    return numerator / denominator;
-}
-
         document.addEventListener('DOMContentLoaded', function () {
-            var map, datasource;
+            var map, datasource, constructionDatasource;
 
             // Initialize map and datasource
             map = new atlas.Map('myMap', {
@@ -124,18 +89,27 @@ function perpendicularDistance(point, start, end) {
             });
 
             map.events.add('ready', function () {
-                // Create a data source once the map is ready.
+                // Create data sources once the map is ready.
                 datasource = new atlas.source.DataSource();
+                constructionDatasource = new atlas.source.DataSource();
                 map.sources.add(datasource);
+                map.sources.add(constructionDatasource);
 
-                // Add a layer for the line to make it visible
+                // Add a layer for the bus route lines
                 map.layers.add(new atlas.layer.LineLayer(datasource, null, {
                     strokeColor: 'blue', // Color of the line
                     strokeWidth: 3 // Width of the line
                 }));
 
-                // Load bus routes when the map is ready.
+                // Add a layer for the construction site lines
+                map.layers.add(new atlas.layer.LineLayer(constructionDatasource, null, {
+                    strokeColor: 'red', // Color of the construction site lines
+                    strokeWidth: 3 // Width of the construction site lines
+                }));
+
+                // Load bus routes and construction sites when the map is ready.
                 loadBusRoutes();
+                loadConstructionSites();
             });
 
             async function loadBusRoutes() {
@@ -197,89 +171,183 @@ function perpendicularDistance(point, start, end) {
             }
 
             async function loadCoordinates(routeId, tripId) {
-    try {
-        // Call external API to fetch list of coordinates for selected bus route and trip
-        const response = await fetch(`https://busmetroapiapp.azurewebsites.net/api/Maps/GetTripData?RouteId=${routeId}&TripID=${tripId}`);
-        
-        if (!response.ok) {
-            throw new Error('Failed to fetch coordinates data');
-        }
+                try {
+                    // Call external API to fetch list of coordinates for selected bus route and trip
+                    const response = await fetch(`https://busmetroapiapp.azurewebsites.net/api/Maps/GetTripData?RouteId=${routeId}&TripID=${tripId}`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch coordinates data');
+                    }
 
-        const coordinatesData = await response.json();
+                    const coordinatesData = await response.json();
 
-        // Verify if coordinatesData is an array and contains data
-        if (!Array.isArray(coordinatesData) || coordinatesData.length === 0) {
-            throw new Error('Coordinates data is empty or invalid');
-        }
+                    // Verify if coordinatesData is an array and contains data
+                    if (!Array.isArray(coordinatesData) || coordinatesData.length === 0) {
+                        throw new Error('Coordinates data is empty or invalid');
+                    }
 
-        // Clear existing data
-        datasource.clear();
+                    // Clear existing data in the datasource
+                    datasource.clear();
 
-        // Extract longitude and latitude coordinates
-        const coordinates = coordinatesData.map(coord => [coord.stop_lon, coord.stop_lat]);
+                    // Extract coordinates and filter every fifth coordinate
+                    const coordinates = coordinatesData
+                        .map(coord => [coord.stop_lon, coord.stop_lat]);
+                        // .filter((_, index) => index % 1 === 0);
 
-        if (coordinates.length > 1) {
-            // Calculate bounding box manually
-            let minLon = Number.POSITIVE_INFINITY;
-            let maxLon = Number.NEGATIVE_INFINITY;
-            let minLat = Number.POSITIVE_INFINITY;
-            let maxLat = Number.NEGATIVE_INFINITY;
+                    if (coordinates.length > 1) {
+                        // Calculate bounding box manually
+                        let minLon = Number.POSITIVE_INFINITY;
+                        let maxLon = Number.NEGATIVE_INFINITY;
+                        let minLat = Number.POSITIVE_INFINITY;
+                        let maxLat = Number.NEGATIVE_INFINITY;
 
-            coordinates.forEach(coord => {
-                minLon = Math.min(minLon, coord[0]);
-                maxLon = Math.max(maxLon, coord[0]);
-                minLat = Math.min(minLat, coord[1]);
-                maxLat = Math.max(maxLat, coord[1]);
-            });
+                        coordinates.forEach(coord => {
+                            minLon = Math.min(minLon, coord[0]);
+                            maxLon = Math.max(maxLon, coord[0]);
+                            minLat = Math.min(minLat, coord[1]);
+                            maxLat = Math.max(maxLat, coord[1]);
+                        });
 
-            // Create bounding box
-            const bounds = new atlas.data.BoundingBox([minLon, minLat], [maxLon, maxLat]);
+                        // Create bounding box
+                        const bounds = new atlas.data.BoundingBox([minLon, minLat], [maxLon, maxLat]);
 
-            // Fetch routes between consecutive coordinates
-            const routes = await fetchRoutesBetweenCoordinates(coordinates);
+                        // Draw the simplified route on the map
+                        const lineString = new atlas.data.LineString(coordinates);
+                        const shape = new atlas.Shape(lineString);
+                        datasource.add(shape);
 
-            // Draw the obtained routes on the map
-            routes.forEach(route => {
-                const lineString = new atlas.data.LineString(route);
-                const shape = new atlas.Shape(lineString);
-                datasource.add(shape);
-            });
-
-            // Fit map view to the bounding box bounds.
-            map.setCamera({
-                bounds: bounds,
-                padding: 50
-            });
-        } else {
-            throw new Error('Not enough coordinates to draw a route');
-        }
-    } catch (error) {
-        console.error('Error loading coordinates:', error);
-        alert('Failed to load coordinates: ' + error.message);
-    }
-}
-
-
-
-
-async function fetchRoutesBetweenCoordinates(coordinates) {
-    const routes = [];
-    for (let i = 0; i < coordinates.length - 1; i++) {
-        const startPoint = coordinates[i];
-        const endPoint = coordinates[i + 1];
-        const route = await fetchRoute(startPoint, endPoint);
-        routes.push(route);
-    }
-    return routes;
-}
-
-async function fetchRoute(startPoint, endPoint) {
-    const response = await fetch(`https://atlas.microsoft.com/route/directions/json?subscription-key=ga6N-Pxs9QImElvXeg3J3H7UQRcVk_zRXejD8NJQt6E&api-version=1.0&query=${startPoint[1]},${startPoint[0]}:${endPoint[1]},${endPoint[0]}`);
-    const data = await response.json();
-    const route = data.routes[0].legs[0].points.map(point => [point.longitude, point.latitude]);
-    return route;
+                        // Fit map view to the bounding box bounds
+                        map.setCamera({
+                            bounds: bounds,
+                            padding: 50
+                        });
+                    } else {
+                        throw new Error('Not enough coordinates to draw a route');
+                    }
+                } catch (error) {
+                    console.error('Error loading coordinates:', error);
+                    alert('Failed to load coordinates: ' + error.message);
+                }
             }
 
+            async function loadConstructionSites() {
+                try {
+                    const response = await fetch('https://busmetroapiapp.azurewebsites.net/api/Maps/GetConstructionSites');
+                    const constructionData = await response.json();
+                    const sites = groupBy(constructionData, 'site_no');
+
+                    Object.keys(sites).forEach(siteNo => {
+                        const coordinates = sites[siteNo].map(site => [site.site_pt_lon, site.site_pt_lat]);
+                        const sortedCoordinates = nearestNeighborSort(coordinates);
+                        const simplifiedCoordinates = simplifyPolyline(sortedCoordinates, 0.0001);
+                        const lineString = new atlas.data.LineString(simplifiedCoordinates);
+                        const shape = new atlas.Shape(lineString);
+                        constructionDatasource.add(shape);
+                    });
+                } catch (error) {
+                    console.error('Error loading construction sites:', error);
+                    alert('Failed to load construction sites');
+                }
+            }
+
+            function groupBy(array, key) {
+                return array.reduce((result, currentValue) => {
+                    (result[currentValue[key]] = result[currentValue[key]] || []).push(currentValue);
+                    return result;
+                }, {});
+            }
+
+            function haversineDistance(point1, point2) {
+                const R = 6371e3; // Earth radius in meters
+                const lat1 = point1[0] * Math.PI / 180;
+                const lat2 = point2[0] * Math.PI / 180;
+                const deltaLat = (point2[0] - point1[0]) * Math.PI / 180;
+                const deltaLon = (point2[1] - point1[1]) * Math.PI / 180;
+
+                const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+                          Math.cos(lat1) * Math.cos(lat2) *
+                          Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+                return R * c; // Distance in meters
+            }
+
+            function farthestPointIndex(points) {
+                const origin = [0, 0]; // Reference point, can be changed if needed
+                let maxDistance = 0;
+                let farthestIndex = 0;
+
+                for (let i = 0; i < points.length; i++) {
+                    const distance = haversineDistance(origin, points[i]);
+                    if (distance > maxDistance) {
+                        maxDistance = distance;
+                        farthestIndex = i;
+                    }
+                }
+
+                return farthestIndex;
+            }
+
+            function nearestNeighborSort(points) {
+                if (points.length <= 1) return points;
+
+                const farthestIndex = farthestPointIndex(points);
+                const sortedPoints = [points[farthestIndex]];
+                points.splice(farthestIndex, 1);
+
+                while (points.length > 0) {
+                    let nearestIndex = 0;
+                    let nearestDistance = Number.POSITIVE_INFINITY;
+
+                    for (let i = 0; i < points.length; i++) {
+                        const distance = haversineDistance(sortedPoints[sortedPoints.length - 1], points[i]);
+                        if (distance < nearestDistance) {
+                            nearestDistance = distance;
+                            nearestIndex = i;
+                        }
+                    }
+
+                    sortedPoints.push(points[nearestIndex]);
+                    points.splice(nearestIndex, 1);
+                }
+
+                return sortedPoints;
+            }
+
+            function simplifyPolyline(polyline, tolerance) {
+                if (polyline.length <= 2) {
+                    return polyline; 
+                }
+
+                // Find the point with the maximum distance
+                let maxDistance = 0;
+                let maxIndex = 0;
+                const end = polyline.length - 1;
+                const start = 0;
+                for (let i = start + 1; i < end; i++) {
+                    const distance = perpendicularDistance(polyline[i], polyline[start], polyline[end]);
+                    if (distance > maxDistance) {
+                        maxDistance = distance;
+                        maxIndex = i;
+                    }
+                }
+
+                // If the maximum distance is greater than the tolerance, recursively simplify
+                if (maxDistance > tolerance) {
+                    const leftPart = simplifyPolyline(polyline.slice(start, maxIndex + 1), tolerance);
+                    const rightPart = simplifyPolyline(polyline.slice(maxIndex, end + 1), tolerance);
+                    return leftPart.slice(0, leftPart.length - 1).concat(rightPart);
+                } else {
+                    return [polyline[start], polyline[end]];
+                }
+            }
+
+            // Function to calculate the perpendicular distance from a point to a line segment
+            function perpendicularDistance(point, start, end) {
+                const numerator = Math.abs((end[1] - start[1]) * point[0] - (end[0] - start[0]) * point[1] + end[0] * start[1] - end[1] * start[0]);
+                const denominator = Math.sqrt(Math.pow(end[1] - start[1], 2) + Math.pow(end[0] - start[0], 2));
+                return numerator / denominator;
+            }
 
         });
     </script>
