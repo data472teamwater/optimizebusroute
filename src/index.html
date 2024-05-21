@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <title>Christchurch Bus Route Optimizer</title>
@@ -28,10 +28,11 @@
             font-size: 24px;
             text-align: center;
             margin: 20px 0;
+            position: relative;
         }
         #myMap {
             width: 100%;
-            height: calc(100% - 80px); /* Adjust height to account for the title and some padding */
+            height: calc(100% - 100px); /* Adjust height to account for the title and legend */
         }
         #controls {
             position: absolute;
@@ -58,10 +59,37 @@
             border-radius: 10px;
             background-color: #f9f9f9;
         }
+        #legend {
+            display: none; /* Initially hide the legend */
+            position: absolute;
+            bottom: 40px;
+            left: 20px; /* Adjust the left position */
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-line {
+            width: 20px;
+            height: 2px;
+        }
+        .bus-route-line {
+            background-color: blue;
+        }
+        .construction-works-line {
+            background-color: red;
+        }
     </style>
 </head>
 <body>
-    <div id="title">Christchurch Bus Route Optimizer</div>
+    <div id="title">
+        Christchurch Bus Route Optimizer
+    </div>
     <div id="myMap"></div>
 
     <div id="controls">
@@ -71,6 +99,17 @@
         <select id="busTripsDropdown">
             <option value="">Select a bus trip...</option>
         </select>
+    </div>
+
+    <div id="legend">
+        <div class="legend-item">
+            <div class="legend-line bus-route-line"></div>
+            <span>Bus Route</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-line construction-works-line"></div>
+            <span>Construction Works</span>
+        </div>
     </div>
 
     <script>
@@ -221,6 +260,8 @@
                             bounds: bounds,
                             padding: 50
                         });
+                        // Show the legend once the map is loaded
+                        document.getElementById('legend').style.display = 'block';
                     } else {
                         throw new Error('Not enough coordinates to draw a route');
                     }
