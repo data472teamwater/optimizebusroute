@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy Node.js app to Azure Web App - chchoptimizebusroute
+name: Deploy static HTML site to Azure Web App - chchoptimizebusroute
 
 on:
   push:
@@ -21,16 +21,14 @@ jobs:
         with:
           node-version: '20.x'
 
-      - name: npm install, build, and test
-        run: |
-          npm install
-          npm run build --if-present
-          npm run test --if-present
+      - name: Install dependencies
+        run: npm install
+        working-directory: ./src
       
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v3
         with:
-          name: node-app
+          name: static-html-site
           path: ./src
 
   deploy:
@@ -46,8 +44,9 @@ jobs:
       - name: Download artifact from build job
         uses: actions/download-artifact@v3
         with:
-          name: node-app
-      
+          name: static-html-site
+          path: ./src
+
       - name: Login to Azure
         uses: azure/login@v1
         with:
@@ -55,11 +54,10 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_5A6284101DD84932B12A3B4FA9814B57 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_CB098C5EE1624C5489470E1E3AE0B62C }}
 
-      - name: 'Deploy to Azure Web App'
+      - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         id: deploy-to-webapp
         with:
           app-name: 'chchoptimizebusroute'
           slot-name: 'Production'
-          package: .
-          
+          package: ./src
