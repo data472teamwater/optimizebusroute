@@ -22,15 +22,15 @@ jobs:
     - name: Log in to registry
       uses: docker/login-action@v2
       with:
-        registry: https://mcr.microsoft.com/
-        username: ${{ secrets.AzureAppService_ContainerUsername_c8a4d19549214de3818d9483662782b5 }}
-        password: ${{ secrets.AzureAppService_ContainerPassword_f3422f514ed84291b98ce60f2ac9ff81 }}
+        registry: https://index.docker.io/v1/
+        username: ${{ secrets.AzureAppService_ContainerUsername_66455b864db64a4dbee5fa439eb8642a }}
+        password: ${{ secrets.AzureAppService_ContainerPassword_fde1d6e1a1d848229f38bd63beb6f26e }}
 
     - name: Build and push container image to registry
       uses: docker/build-push-action@v3
       with:
         push: true
-        tags: mcr.microsoft.com/${{ secrets.AzureAppService_ContainerUsername_c8a4d19549214de3818d9483662782b5 }}/appsvc/staticsite:${{ github.sha }}
+        tags: index.docker.io/${{ secrets.AzureAppService_ContainerUsername_66455b864db64a4dbee5fa439eb8642a }}/chchmetro:${{ github.sha }}
         file: ./Dockerfile
 
   deploy:
@@ -47,5 +47,5 @@ jobs:
       with:
         app-name: 'chchmetrobusroute'
         slot-name: 'production'
-        publish-profile: ${{ secrets.AzureAppService_PublishProfile_c474125b014f402ca62500e5a73144d3 }}
-        images: 'mcr.microsoft.com/${{ secrets.AzureAppService_ContainerUsername_c8a4d19549214de3818d9483662782b5 }}/appsvc/staticsite:${{ github.sha }}'
+        publish-profile: ${{ secrets.AzureAppService_PublishProfile_dac19d9610e847a4acc532d1812155a7 }}
+        images: 'index.docker.io/${{ secrets.AzureAppService_ContainerUsername_66455b864db64a4dbee5fa439eb8642a }}/chchmetro:${{ github.sha }}'
