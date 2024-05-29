@@ -1,3 +1,6 @@
+## URL:
+The URL for the site can be accessed using https://chchoptimizebusroute.azurewebsites.net/ . Sporadically the data from the API fails to load due to CORS issue even after the CORS settings are applied. Refreshing the page couple of times or accessing after sometime fixes the problem. Still we are yet to determine the root cause of this issue. 
+
 ## AIM:
 
 This repo focuses on creating a webpage for plotting the actual bus routes and the construction sites on map.
